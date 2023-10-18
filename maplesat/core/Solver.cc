@@ -368,9 +368,23 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.push();      // (leave room for the asserting literal)
     int index   = trail.size() - 1;
 
+    bool isFirstReasoningClause = true;
+
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
+
+        // Log the reasoning clause:
+        if (logfile) {
+            if (isFirstReasoningClause) {
+                fprintf(logfile, "r ");
+                isFirstReasoningClause = false;
+            }
+            for (int m = 0; m < c.size(); m++) {
+                fprintf(logfile, "%i ", (var(c[m]) + 1) * (-2 * sign(c[m]) + 1));
+            }
+            fprintf(logfile, "0 ");
+        }
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
@@ -407,6 +421,11 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     }while (pathC > 0);
     out_learnt[0] = ~p;
+
+    // Add the UIP after all reasoning clauses are processed:
+    if (logfile) {
+        fprintf(logfile, "u %i 0\n", (var(p) + 1) * (-2 * sign(p) + 1));
+    }
 
     // Simplify conflict clause:
     //
@@ -626,17 +645,6 @@ CRef Solver::propagate()
                     watches[~c[1]].push(w);
                     goto NextClause; }
 
-
-            if (logfile) {
-                fprintf(logfile, "Unit Literal: %i\n", (var(first) + 1) * (-2 * sign(first) + 1));
-                fprintf(logfile, "Reasoning Clause: ");
-                for (int m = 0; m < c.size(); m++) {
-                    fprintf(logfile, "%i ", (var(c[m]) + 1) * (-2 * sign(c[m]) + 1));
-                }
-                fprintf(logfile, "0\n\n");
-            }
-
-
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
             if (value(first) == l_False){
@@ -647,6 +655,12 @@ CRef Solver::propagate()
                     *j++ = *i++;
             }else
                 uncheckedEnqueue(first, cr);
+
+                // Output the unit clause to reasoning_log.txt:
+                fprintf(logfile, "u ");
+                for (int k = 0; k < c.size(); k++)
+                    fprintf(logfile, "%s%d ", (sign(c[k]) ? "-" : ""), var(c[k]) + 1);
+                fprintf(logfile, "0\n");
 
         NextClause:;
         }
