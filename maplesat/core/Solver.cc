@@ -440,6 +440,12 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     // Find correct backtrack level:
     //
 
+    /*
+    Writing to reasoning.log:
+    if the learned clause from the conflict is a unit clause, 
+    then lastUnitReasons provides a list of clauses that became unit and led up to this conflict.
+    */
+
     if (out_learnt.size() == 1){
         out_btlevel = 0;
         FILE* logFile = fopen("reasoning.log", "a"); // Open the log file in append mode
@@ -655,15 +661,17 @@ CRef Solver::propagate()
 
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
-            if (value(first) == l_False){
+            if (value(first) == l_False){ // there's a conflict because the clause cannot be satisfied
                 confl = cr;
                 qhead = trail.size();
                 // Copy the remaining watches:
                 while (i < end)
                     *j++ = *i++;
             }else
-                uncheckedEnqueue(first, cr);
-                lastUnitReasons.push(cr);
+                uncheckedEnqueue(first, cr); 
+                lastUnitReasons.push(cr); //add the reference of the unit clause
+
+                //printf("%u\n", cr);
 
         NextClause:;
         }
