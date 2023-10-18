@@ -27,7 +27,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 
-
 namespace Minisat {
 
 //=================================================================================================
@@ -43,6 +42,8 @@ public:
 
     // Problem specification:
     //
+    vec<CRef> lastUnitReasons;
+
     Var     newVar    (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
 
     bool    addClause (const vec<Lit>& ps);                     // Add a clause to the solver. 
@@ -146,7 +147,7 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
-    const char* unitoutstring;
+
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
     vec<uint64_t> picked;
@@ -170,6 +171,9 @@ protected:
 
     // Helper structures:
     //
+
+    static int improvedToInt(const Lit& l);
+    
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
 

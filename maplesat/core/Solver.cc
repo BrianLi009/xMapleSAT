@@ -25,10 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
-FILE* logfile = fopen("reasoning_log.txt", "w");
-
-FILE* unitoutfile = NULL;
-
 //=================================================================================================
 // Options:
 
@@ -58,7 +54,6 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
-static StringOption  opt_unit_out       (_cat, "unit-out", "File to output the learnt unit clauses");
 
 
 //=================================================================================================
@@ -113,7 +108,6 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
-  , unitoutstring (opt_unit_out)
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -133,19 +127,11 @@ Solver::Solver() :
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
-{
-    if(unitoutstring != NULL) {
-            unitoutfile = fopen(unitoutstring, "w");
-        }
-}
+{}
 
 
 Solver::~Solver()
 {
-    if(unitoutfile != NULL)
-    {   fclose(unitoutfile);
-        unitoutfile = NULL;
-    }
 }
 
 
@@ -341,6 +327,14 @@ Lit Solver::pickBranchLit()
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
 }
 
+int Solver::improvedToInt(const Lit& l) {
+    int result = var(l) + 1;  // assuming variables start from 0
+    if (sign(l)) {
+        result = -result;
+    }
+    return result;
+}
+
 /*_________________________________________________________________________________________________
 |
 |  analyze : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
@@ -368,23 +362,9 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.push();      // (leave room for the asserting literal)
     int index   = trail.size() - 1;
 
-    bool isFirstReasoningClause = true;
-
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
-
-        // Log the reasoning clause:
-        if (logfile) {
-            if (isFirstReasoningClause) {
-                fprintf(logfile, "r ");
-                isFirstReasoningClause = false;
-            }
-            for (int m = 0; m < c.size(); m++) {
-                fprintf(logfile, "%i ", (var(c[m]) + 1) * (-2 * sign(c[m]) + 1));
-            }
-            fprintf(logfile, "0 ");
-        }
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
@@ -422,11 +402,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     }while (pathC > 0);
     out_learnt[0] = ~p;
 
-    // Add the UIP after all reasoning clauses are processed:
-    if (logfile) {
-        fprintf(logfile, "u %i 0\n", (var(p) + 1) * (-2 * sign(p) + 1));
-    }
-
     // Simplify conflict clause:
     //
     int i, j;
@@ -461,10 +436,41 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.shrink(i - j);
     tot_literals += out_learnt.size();
 
+
     // Find correct backtrack level:
     //
-    if (out_learnt.size() == 1)
+
+    if (out_learnt.size() == 1){
         out_btlevel = 0;
+        FILE* logFile = fopen("reasoning.log", "a"); // Open the log file in append mode
+
+        // Reason clauses
+        fprintf(logFile, "r ");
+        for (int i = 0; i < lastUnitReasons.size(); i++) {
+            Clause& c = ca[lastUnitReasons[i]];
+            for (int j = 0; j < c.size(); j++) {
+                fprintf(logFile, "%d ", improvedToInt(c[j]));
+            }
+            if (i < lastUnitReasons.size() - 1) fprintf(logFile, "0 ");  // Separate different clauses with a '0'
+        }
+
+        // unit clause
+        fprintf(logFile, "u %d ", improvedToInt(out_learnt[0]));
+
+/*    // Unit clauses
+    fprintf(logFile, "l ");
+    for (int i = 0; i < lastUnitReasons.size(); i++) {
+        Clause& c = ca[lastUnitReasons[i]];
+        for (int j = 0; j < c.size(); j++) {
+            if (value(c[j]) == l_Undef) {  // Only add undecided literals
+                fprintf(logFile, "%d ", improvedToInt(c[j]));
+                break;
+            }
+        }
+    }
+*/
+    fprintf(logFile, "\n");  // New line for the next entry
+    fclose(logFile);}  // Close the file
     else{
         int max_i = 1;
         // Find the first literal assigned at the next-highest level:
@@ -610,6 +616,8 @@ CRef Solver::propagate()
     CRef    confl     = CRef_Undef;
     int     num_props = 0;
     watches.cleanAll();
+    lastUnitReasons.clear();
+
 
     while (qhead < trail.size()){
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
@@ -655,12 +663,7 @@ CRef Solver::propagate()
                     *j++ = *i++;
             }else
                 uncheckedEnqueue(first, cr);
-
-                // Output the unit clause to reasoning_log.txt:
-                fprintf(logfile, "u ");
-                for (int k = 0; k < c.size(); k++)
-                    fprintf(logfile, "%s%d ", (sign(c[k]) ? "-" : ""), var(c[k]) + 1);
-                fprintf(logfile, "0\n");
+                lastUnitReasons.push(cr);
 
         NextClause:;
         }
@@ -845,7 +848,6 @@ lbool Solver::search(int nof_conflicts)
 
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
-                if(unitoutfile) fprintf(unitoutfile, "%i 0\n", (var(learnt_clause[0]) + 1) * (-2 * sign(learnt_clause[0]) + 1));
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
                 learnts.push(cr);
