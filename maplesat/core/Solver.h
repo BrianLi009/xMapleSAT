@@ -146,7 +146,7 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
-
+    const char* unitoutstring;
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
     vec<uint64_t> picked;

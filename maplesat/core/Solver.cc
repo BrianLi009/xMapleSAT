@@ -25,6 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
+FILE* logfile = fopen("reasoning_log.txt", "w");
+
+FILE* unitoutfile = NULL;
+
 //=================================================================================================
 // Options:
 
@@ -54,6 +58,7 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
+static StringOption  opt_unit_out       (_cat, "unit-out", "File to output the learnt unit clauses");
 
 
 //=================================================================================================
@@ -108,6 +113,7 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
+  , unitoutstring (opt_unit_out)
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -127,11 +133,19 @@ Solver::Solver() :
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
-{}
+{
+    if(unitoutstring != NULL) {
+            unitoutfile = fopen(unitoutstring, "w");
+        }
+}
 
 
 Solver::~Solver()
 {
+    if(unitoutfile != NULL)
+    {   fclose(unitoutfile);
+        unitoutfile = NULL;
+    }
 }
 
 
@@ -612,6 +626,17 @@ CRef Solver::propagate()
                     watches[~c[1]].push(w);
                     goto NextClause; }
 
+
+            if (logfile) {
+                fprintf(logfile, "Unit Literal: %i\n", (var(first) + 1) * (-2 * sign(first) + 1));
+                fprintf(logfile, "Reasoning Clause: ");
+                for (int m = 0; m < c.size(); m++) {
+                    fprintf(logfile, "%i ", (var(c[m]) + 1) * (-2 * sign(c[m]) + 1));
+                }
+                fprintf(logfile, "0\n\n");
+            }
+
+
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
             if (value(first) == l_False){
@@ -806,6 +831,7 @@ lbool Solver::search(int nof_conflicts)
 
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
+                if(unitoutfile) fprintf(unitoutfile, "%i 0\n", (var(learnt_clause[0]) + 1) * (-2 * sign(learnt_clause[0]) + 1));
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
                 learnts.push(cr);
