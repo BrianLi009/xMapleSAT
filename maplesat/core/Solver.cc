@@ -399,6 +399,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         seen[var(p)] = 0;
         pathC--;
 
+
     }while (pathC > 0);
     out_learnt[0] = ~p;
 
@@ -450,6 +451,9 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         out_btlevel = 0;
         FILE* logFile = fopen("reasoning.log", "a"); // Open the log file in append mode
 
+        // Output the decision literal 'next' to reasoning.log
+        fprintf(logFile, "d %d ", improvedToInt(decisionliteral));
+
         // Reason clauses
         fprintf(logFile, "r ");
         for (int i = 0; i < lastUnitReasons.size(); i++) {
@@ -463,18 +467,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         // unit clause
         fprintf(logFile, "u %d ", improvedToInt(out_learnt[0]));
 
-/*    // Unit clauses
-    fprintf(logFile, "l ");
-    for (int i = 0; i < lastUnitReasons.size(); i++) {
-        Clause& c = ca[lastUnitReasons[i]];
-        for (int j = 0; j < c.size(); j++) {
-            if (value(c[j]) == l_Undef) {  // Only add undecided literals
-                fprintf(logFile, "%d ", improvedToInt(c[j]));
-                break;
-            }
-        }
-    }
-*/
     fprintf(logFile, "\n");  // New line for the next entry
     fclose(logFile);}  // Close the file
     else{
@@ -930,6 +922,7 @@ lbool Solver::search(int nof_conflicts)
                 // New variable decision:
                 decisions++;
                 next = pickBranchLit();
+                decisionliteral = next;
 
                 if (next == lit_Undef)
                     // Model found:

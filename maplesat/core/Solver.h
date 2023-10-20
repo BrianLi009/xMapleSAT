@@ -42,7 +42,6 @@ public:
 
     // Problem specification:
     //
-    vec<CRef> lastUnitReasons;
 
     Var     newVar    (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
 
@@ -111,6 +110,9 @@ public:
     vec<lbool> model;             // If problem is satisfiable, this vector contains the model (if any).
     vec<Lit>   conflict;          // If problem is unsatisfiable (possibly under assumptions),
                                   // this vector represent the final conflict clause expressed in the assumptions.
+    vec<Lit> decisionLiterals;
+    vec<CRef> lastUnitReasons;
+    Lit decisionliteral;
 
     // Mode of operation:
     //
@@ -173,7 +175,7 @@ protected:
     //
 
     static int improvedToInt(const Lit& l);
-    
+
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
 
